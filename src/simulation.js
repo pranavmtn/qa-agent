@@ -1,6 +1,6 @@
 import useStore from './store'
 
-const SCREENSHOT_SERVER = 'http://localhost:3001'
+const SCREENSHOT_SERVER = import.meta.env.VITE_SCREENSHOT_SERVER || 'http://localhost:3001'
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
