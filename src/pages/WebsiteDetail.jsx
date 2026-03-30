@@ -19,8 +19,11 @@ export default function WebsiteDetail() {
   const [taskDesc, setTaskDesc] = useState('')
   const [runningTask, setRunningTask] = useState(null)
   const [progress, setProgress] = useState({ step: '', pct: 0, logs: [] })
-  const [editingProductUrl, setEditingProductUrl] = useState(false)
-  const [productUrlDraft, setProductUrlDraft] = useState('')
+  const [ecomDraft, setEcomDraft] = useState({ product_url: '', category_url: '', variation_selectors: '' })
+  const [editingEcom, setEditingEcom] = useState(false)
+  const [manualUrlsDraft, setManualUrlsDraft] = useState('')
+  const [editingManualUrls, setEditingManualUrls] = useState(false)
+  const [showQaSettings, setShowQaSettings] = useState(false)
 
   if (!website) return <p className="text-gray-400">Website not found.</p>
 
@@ -66,45 +69,174 @@ export default function WebsiteDetail() {
       <div className="mt-2 mb-6">
         <h1 className="text-2xl font-bold">{website.name}</h1>
         <p className="text-sm text-gray-500 mt-1">{website.staging_url}</p>
-        {website.live_url && <p className="text-sm text-gray-400">{website.live_url}</p>}
         <div className="flex gap-2 mt-2 flex-wrap">
           {website.http_auth_enabled && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">HTTP Auth</span>}
           {website.is_ecommerce && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">E-commerce</span>}
           {website.product_url && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full" title={website.product_url}>🛒 Product: {website.product_url.replace(/https?:\/\/[^/]+/, '').slice(0, 30)}</span>}
+          {website.login_enabled && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🔐 Login Flow</span>}
+          {website.multi_viewport_enabled && <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">📱 Multi-Viewport</span>}
+          {website.test_forms_enabled && <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full">🧪 Form Testing</span>}
+          {website.manual_urls && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">📋 {website.manual_urls.split('\n').filter(s => s.trim()).length} manual URLs</span>}
         </div>
-        {/* Editable product URL for e-commerce */}
+
+        {/* Manual test URLs */}
+        <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-100">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-xs font-medium text-orange-700">📋 Manual Test URLs</p>
+              <p className="text-xs text-gray-400">When set, ONLY these URLs are tested — auto-discovery is skipped</p>
+            </div>
+            {!editingManualUrls && (
+              <button onClick={() => { setManualUrlsDraft(website.manual_urls || ''); setEditingManualUrls(true) }} className="text-xs text-orange-500 hover:text-orange-700">✏️ Edit</button>
+            )}
+          </div>
+          {editingManualUrls ? (
+            <div className="space-y-2">
+              <textarea
+                autoFocus
+                className="w-full border rounded px-2 py-1.5 text-xs font-mono"
+                rows={6}
+                placeholder={"https://example.com/\nhttps://example.com/shop\nhttps://example.com/product/t-shirt\nhttps://example.com/contact"}
+                value={manualUrlsDraft}
+                onChange={(e) => setManualUrlsDraft(e.target.value)}
+              />
+              <p className="text-xs text-gray-400">One URL per line. Leave empty to use auto-discovery.</p>
+              <div className="flex gap-2">
+                <button onClick={() => { updateWebsite(wid, { manual_urls: manualUrlsDraft.trim() }); setEditingManualUrls(false); toast.success('Manual URLs saved') }} className="text-xs px-3 py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600">Save</button>
+                <button onClick={() => setEditingManualUrls(false)} className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {website.manual_urls ? (
+                <div className="space-y-0.5">
+                  {website.manual_urls.split('\n').filter(s => s.trim()).map((u, i) => (
+                    <p key={i} className="text-xs text-orange-700 font-mono truncate">{u.trim()}</p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic">Not set — auto-discovery will be used</p>
+              )}
+            </div>
+          )}
+        </div>
+        {/* E-commerce settings */}
         {website.is_ecommerce && (
           <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-purple-700 mb-1">🛒 Product URL (for cart/checkout testing)</p>
-                {editingProductUrl ? (
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-purple-700">🛒 E-commerce Test Settings</p>
+              {!editingEcom && (
+                <button
+                  onClick={() => { setEcomDraft({ product_url: website.product_url || '', category_url: website.category_url || '', variation_selectors: website.variation_selectors || '' }); setEditingEcom(true) }}
+                  className="text-xs text-purple-500 hover:text-purple-700"
+                >✏️ Edit</button>
+              )}
+            </div>
+            {editingEcom ? (
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Product URL * <span className="text-gray-400">(add-to-cart &amp; checkout flow)</span></label>
+                  <input className="w-full border rounded px-2 py-1.5 text-sm" placeholder="https://example.com/product/t-shirt" value={ecomDraft.product_url} onChange={(e) => setEcomDraft((d) => ({ ...d, product_url: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Category / Shop URL <span className="text-gray-400">(optional)</span></label>
+                  <input className="w-full border rounded px-2 py-1.5 text-sm" placeholder="https://example.com/shop" value={ecomDraft.category_url} onChange={(e) => setEcomDraft((d) => ({ ...d, category_url: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Variable product selectors <span className="text-gray-400">(one per line — CSS selectors to pick before Add to Cart)</span></label>
+                  <textarea
+                    className="w-full border rounded px-2 py-1.5 text-xs font-mono"
+                    rows={3}
+                    placeholder={"select[name='pa_size']\nselect[name='pa_color']\n.swatch-size li:first-child"}
+                    value={ecomDraft.variation_selectors}
+                    onChange={(e) => setEcomDraft((d) => ({ ...d, variation_selectors: e.target.value }))}
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => { updateWebsite(wid, { product_url: ecomDraft.product_url.trim(), category_url: ecomDraft.category_url.trim(), variation_selectors: ecomDraft.variation_selectors.trim() }); setEditingEcom(false); toast.success('E-commerce settings saved') }} className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700">Save</button>
+                  <button onClick={() => setEditingEcom(false)} className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1 text-sm">
+                <div className="flex gap-2">
+                  <span className="text-xs text-gray-500 w-20 shrink-0">Product URL</span>
+                  <span className="text-xs text-purple-700 truncate">{website.product_url || <span className="text-gray-400 italic">Not set</span>}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-xs text-gray-500 w-20 shrink-0">Category URL</span>
+                  <span className="text-xs text-purple-700 truncate">{website.category_url || <span className="text-gray-400 italic">Not set</span>}</span>
+                </div>
+                {website.variation_selectors && (
                   <div className="flex gap-2">
-                    <input
-                      autoFocus
-                      className="flex-1 border rounded px-2 py-1 text-sm"
-                      placeholder="https://example.com/products/sample-item"
-                      value={productUrlDraft}
-                      onChange={(e) => setProductUrlDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          updateWebsite(wid, { product_url: productUrlDraft.trim() })
-                          setEditingProductUrl(false)
-                          toast.success('Product URL updated')
-                        }
-                      }}
-                    />
-                    <button onClick={() => { updateWebsite(wid, { product_url: productUrlDraft.trim() }); setEditingProductUrl(false); toast.success('Product URL updated') }} className="text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">Save</button>
-                    <button onClick={() => setEditingProductUrl(false)} className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700">Cancel</button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-purple-600 truncate">{website.product_url || 'Not set — click edit to add'}</p>
-                    <button onClick={() => { setProductUrlDraft(website.product_url || ''); setEditingProductUrl(true) }} className="text-xs text-purple-500 hover:text-purple-700">✏️ Edit</button>
+                    <span className="text-xs text-gray-500 w-20 shrink-0">Var. selectors</span>
+                    <span className="text-xs text-gray-600 font-mono truncate">{website.variation_selectors.split('\n').filter(Boolean).length} selector(s)</span>
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* QA Settings panel */}
+      <div className="mt-3 mb-2">
+        <button onClick={() => setShowQaSettings((v) => !v)} className="text-xs text-indigo-600 hover:underline">
+          {showQaSettings ? '▲ Hide QA settings' : '▼ Edit QA settings'}
+        </button>
+        {showQaSettings && (
+          <div className="mt-2 p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+            {/* Multi-viewport */}
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="mvp_edit" checked={website.multi_viewport_enabled ?? false}
+                onChange={(e) => { updateWebsite(wid, { multi_viewport_enabled: e.target.checked }); toast.success('Settings saved') }} />
+              <label htmlFor="mvp_edit" className="text-sm">Multi-viewport screenshots <span className="text-xs text-gray-400">(mobile / tablet / desktop)</span></label>
             </div>
+            {/* Form testing */}
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="forms_edit" checked={website.test_forms_enabled ?? false}
+                onChange={(e) => { updateWebsite(wid, { test_forms_enabled: e.target.checked }); toast.success('Settings saved') }} />
+              <label htmlFor="forms_edit" className="text-sm">Form submission testing <span className="text-xs text-gray-400">(auto-fill &amp; submit forms)</span></label>
+            </div>
+            {/* Login flow */}
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="login_edit" checked={website.login_enabled ?? false}
+                onChange={(e) => { updateWebsite(wid, { login_enabled: e.target.checked }); toast.success('Settings saved') }} />
+              <label htmlFor="login_edit" className="text-sm">Login flow automation</label>
+            </div>
+            {(website.login_enabled ?? false) && (
+              <div className="ml-5 space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                {[
+                  { key: 'login_url', label: 'Login page URL', ph: 'https://example.com/login' },
+                  { key: 'login_username', label: 'Username / Email', ph: 'user@example.com' },
+                  { key: 'login_user_selector', label: 'Username selector (optional)', ph: '#email' },
+                  { key: 'login_pass_selector', label: 'Password selector (optional)', ph: '#password' },
+                  { key: 'login_submit_selector', label: 'Submit selector (optional)', ph: 'button[type="submit"]' },
+                ].map(({ key, label, ph }) => (
+                  <div key={key}>
+                    <label className="block text-xs text-blue-700 mb-0.5">{label}</label>
+                    <input
+                      className="w-full border rounded px-2 py-1 text-sm"
+                      placeholder={ph}
+                      value={website[key] || ''}
+                      onChange={(e) => updateWebsite(wid, { [key]: e.target.value })}
+                      onBlur={() => toast.success('Settings saved')}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-xs text-blue-700 mb-0.5">Password</label>
+                  <input
+                    className="w-full border rounded px-2 py-1 text-sm"
+                    type="password"
+                    placeholder="••••••••"
+                    value={website.login_password || ''}
+                    onChange={(e) => updateWebsite(wid, { login_password: e.target.value })}
+                    onBlur={() => toast.success('Settings saved')}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
